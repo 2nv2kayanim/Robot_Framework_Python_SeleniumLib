@@ -1,0 +1,8 @@
+External portal mode uses environment variables only:
+PORTAL_URL
+PORTAL_USERNAME
+PORTAL_PASSWORD
+
+Set PORTAL_URL to a disposable HTTP or HTTPS test environment. Set both credential
+variables to non-production test credentials. Locators are configured separately
+with a Robot Framework variable file such as external_locators.example.py.

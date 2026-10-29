@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.robocop_cache/
+.coverage
+*.py[cod]
+.env
+results/
+allure-report/

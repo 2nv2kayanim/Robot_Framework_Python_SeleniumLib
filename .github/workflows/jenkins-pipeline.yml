@@ -1,0 +1,70 @@
+name: Benefits portal test pipeline
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benefits-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  jenkins:
+    name: Delegate trusted changes to Jenkins
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Trigger and monitor Jenkins
+        env:
+          JENKINS_URL: ${{ vars.JENKINS_URL }}
+          JENKINS_JOB_NAME: ${{ vars.JENKINS_JOB_NAME }}
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+          REPO_URL: ${{ github.event.repository.clone_url }}
+          GIT_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash .github/scripts/trigger-jenkins.sh
+
+  fork-validation:
+    name: Validate fork pull request (${{ matrix.browser }})
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chrome, firefox]
+    env:
+      BROWSER: ${{ matrix.browser }}
+      HEADLESS: "true"
+      CI: "true"
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55 # v5.5.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install locked dependencies
+        run: make setup
+      - name: Lint, typecheck, and unit test
+        run: |
+          make lint
+          make typecheck
+          python -m pytest
+      - name: Run browser suite
+        run: make test
+      - name: Upload reports and diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: benefits-test-reports-${{ matrix.browser }}
+          path: results/**
+          if-no-files-found: warn
+          retention-days: 14
